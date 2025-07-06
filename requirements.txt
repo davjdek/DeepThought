@@ -1,10 +1,11 @@
-txtfastapi==0.104.1
+fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
+numpy==1.24.3
+faiss-cpu==1.7.4 --find-links https://download.pytorch.org/whl/torch_stable.html
 langchain==0.1.0
 langchain-community==0.0.12
 sentence-transformers==2.2.2
 google-generativeai==0.3.2
 beautifulsoup4==4.12.2
 requests==2.31.0
-numpy==1.24.3
