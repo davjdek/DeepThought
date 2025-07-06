@@ -18,7 +18,7 @@ RUN pip install --upgrade pip setuptools wheel
 RUN pip install numpy==1.24.3
 
 # Installa FAISS da conda-forge (più affidabile)
-RUN pip install --index-url https://pypi.anaconda.org/conda-forge/simple faiss-cpu==1.7.4
+RUN pip install faiss-cpu
 
 # Copia requirements senza FAISS
 COPY requirements.txt .
