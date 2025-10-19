@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat RAG Locale con Gemini</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    #response { white-space: pre-wrap; background: #f0f0f0; padding: 1em; margin-top: 1em; border-radius: 5px; }
+    input, button { font-size: 1em; padding: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>Chat RAG Locale con Gemini</h1>
+  <input type="text" id="question" placeholder="Scrivi la domanda..." size="50" />
+  <button onclick="ask()">Invia</button>
+  <pre id="response"></pre>
+
+  <script>
+    async function ask() {
+      const question = document.getElementById("question").value.trim();
+      const responseEl = document.getElementById("response");
+      
+      if (!question) {
+        responseEl.textContent = "Inserisci una domanda.";
+        return;
+      }
+
+      console.log("1. Inizio funzione ask(). Query:", question);
+      responseEl.textContent = "Caricamento..."; // Questo testo appare per un istante
+      console.log("2. Testo 'Caricamento...' impostato.");
+
+      try {
+        console.log("3. Invio richiesta a http://localhost:8000/api/query");
+        const res = await fetch("http://localhost:8000/api/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+
+        console.log("4. Risposta ricevuta dal server. Status:", res.status);
+
+        if (!res.ok) {
+            // Se la risposta non è OK (es. 4xx, 5xx), tenta di leggere l'errore dal JSON
+            const errorData = await res.json().catch(() => ({})); // Gestisce anche il caso in cui non sia JSON
+            const errorMessage = errorData.detail || errorData.error || 'Errore sconosciuto';
+            console.error("5. Errore nella risposta HTTP. Status:", res.status, "Messaggio:", errorMessage);
+            throw new Error(`Errore dal server (${res.status}): ${errorMessage}`);
+        }
+
+        console.log("5. Risposta HTTP OK. Cerco di parsificare JSON.");
+        const data = await res.json();
+        console.log("6. Dati JSON parsificati:", data);
+
+        // Controllo esplicito per la proprietà 'response'
+        if (data && typeof data.response === 'string') {
+            responseEl.textContent = data.response;
+            console.log("7. Testo della risposta impostato:", data.response.substring(0, 100) + "..."); // Solo primi 100 caratteri
+        } else {
+            console.error("ERRORE CRITICO: data.response non è una stringa valida o non esiste!", data);
+            responseEl.textContent = "Errore: La risposta dal server non ha il formato atteso. Controlla la console per i dettagli.";
+        }
+
+      } catch (e) {
+        console.error("8. Errore catturato nel blocco catch:", e.message);
+        responseEl.textContent = "Errore: " + e.message;
+      }
+      console.log("9. Fine funzione ask().");
+    }
+  </script>
+</body>
+</html>
