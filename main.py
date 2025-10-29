@@ -38,13 +38,13 @@ def initialize_rag():
         #    model_kwargs={"device": "cpu"}
         #)
         
-        #   --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
-         #Sfrutta la GEMINI_API_KEY per l'embedding tramite API.
-         #Questo elimina il download di modelli pesanti come i Sentence Transformers.
-         embeddings = GoogleGenerativeAIEmbeddings(
+          # --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
+        # Sfrutta la GEMINI_API_KEY per l'embedding tramite API.
+        # Questo elimina il download di modelli pesanti come i Sentence Transformers.
+        embeddings = GoogleGenerativeAIEmbeddings(
              model="text-embedding-004",  # Modello di embedding consigliato
              api_key=GEMINI_API_KEY,      # Passa la chiave
-         )
+        )
         
         # Caricamento documenti
         loader = WebBaseLoader([
