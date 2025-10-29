@@ -33,18 +33,18 @@ def initialize_rag():
     
     try:
         # Configurazione embeddings
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
-            model_kwargs={"device": "cpu"}
-        )
+        #embeddings = HuggingFaceEmbeddings(
+        #    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
+        #    model_kwargs={"device": "cpu"}
+        #)
         
-          # --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
-        # Sfrutta la GEMINI_API_KEY per l'embedding tramite API.
-        # Questo elimina il download di modelli pesanti come i Sentence Transformers.
-        # embeddings = GoogleGenerativeAIEmbeddings(
-        #     model="text-embedding-004",  # Modello di embedding consigliato
-        #     api_key=GEMINI_API_KEY,      # Passa la chiave
-        # )
+        #   --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
+         #Sfrutta la GEMINI_API_KEY per l'embedding tramite API.
+         #Questo elimina il download di modelli pesanti come i Sentence Transformers.
+         embeddings = GoogleGenerativeAIEmbeddings(
+             model="text-embedding-004",  # Modello di embedding consigliato
+             api_key=GEMINI_API_KEY,      # Passa la chiave
+         )
         
         # Caricamento documenti
         loader = WebBaseLoader([
