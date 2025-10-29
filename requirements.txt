@@ -1,0 +1,17 @@
+# Core Web Framework
+fastapi
+pydantic
+uvicorn # Server ASGI per eseguire FastAPI
+
+# LangChain (orchestratore RAG)
+langchain
+langchain-core
+langchain-community
+
+# LangChain - Vector Store e Splitter specifici
+faiss-cpu # Per FAISS (vectorstore)
+beautifulsoup4 # Utilizzato da WebBaseLoader per l'analisi HTML
+
+# Google Gemini (LLM e Embedding)
+google-genai>=1.0.0  # Forza l'ultima versione stabile
+langchain-google-genai # Per la classe GoogleGenerativeAIEmbeddings
