@@ -10,7 +10,7 @@ google-generativeai==0.8.5
 langchain==0.2.11
 langchain-core==0.2.23
 langchain-community==0.2.9
-langchain-google-genai==3.0.0
+langchain-google-genai
 langchain-text-splitters==0.2.1
 
 # Vector Store - ChromaDB (Aggiornata per stabilità delle dipendenze)
