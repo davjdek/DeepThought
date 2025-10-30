@@ -12,8 +12,8 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
-# Aggiunto RunnableParallel per gestire output multipli in LCEL
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough 
+from langchain_core.runnables.base import RunnableSequence
 
 # Importazioni specifiche di Gemini/Google
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
@@ -33,12 +33,14 @@ if not GEMINI_API_KEY:
 # Modello LLM
 LLM = None
 try:
+    # 🚨 CORREZIONE NOME MODELLO: gemini-2.5-flash è raccomandato per stabilità
     LLM = GoogleGenerativeAI(
         model='gemini-2.5-flash',
         google_api_key=GEMINI_API_KEY,
         temperature=0.7
     )
-except Exception:
+except Exception as e:
+    logger.error(f"Errore inizializzazione LLM: {e}")
     pass
 
 # Variabili globali
@@ -65,7 +67,8 @@ def initialize_rag():
 
         # Configurazione embeddings
         embeddings = GoogleGenerativeAIEmbeddings(
-             model="models/text-embedding-004",
+             # 🛠️ CORREZIONE: Usare il nome modello corretto per embeddings
+             model="text-embedding-004", 
              google_api_key=GEMINI_API_KEY,
         )
         
@@ -87,7 +90,7 @@ def initialize_rag():
         logger.info("Sistema RAG inizializzato con successo usando ChromaDB")
         
     except Exception as e:
-        logger.error(f"Errore inizializzazione RAG. Il servizio rimarrà online ma l'endpoint /api/query non funzionerà: {e}")
+        logger.error(f"Errore inizializzazione RAG: {e}")
         retriever = None 
 
 # --- Funzioni di supporto per LCEL ---
@@ -96,36 +99,40 @@ def format_docs(docs: List[Document]):
     """Formatta i documenti per il prompt."""
     return "\n\n".join(doc.page_content for doc in docs)
 
-def get_rag_chain():
+def get_rag_chain() -> RunnableSequence:
     """Crea e restituisce la catena RAG (LCEL) che restituisce risposta e documenti."""
     if not retriever:
-        raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato.")
+        # Se il controllo fallisce, verrà sollevata una 503 nell'endpoint
+        raise Exception("Retriever non disponibile.")
 
     # 1. Pipeline di recupero e formattazione del contesto
-    context_pipeline = RunnableParallel(
-        # 'context' recupera i documenti e li formatta per il prompt
-        context=(lambda x: x['question']) | retriever | format_docs,
-        # 'documents' recupera i documenti e li restituisce (per il conteggio)
-        documents=(lambda x: x['question']) | retriever,
-        # 'question' semplicemente fa passare la domanda originale
-        question=RunnablePassthrough()
-    )
-
+    # Mappa l'input {"question": "..."} in un dizionario con i componenti necessari
+    setup_and_retrieval = RunnableParallel(
+        # Recupera e formatta i documenti
+        context=(RunnablePassthrough() | retriever | format_docs),
+        # Recupera i documenti grezzi (per il conteggio)
+        documents=(RunnablePassthrough() | retriever),
+        # Passa la domanda originale
+        question=RunnablePassthrough(),
+    ).with_config(run_name="SetupAndRetrieval")
+    
     # 2. Pipeline di generazione della risposta
     response_pipeline = (
-        context_pipeline 
+        setup_and_retrieval.pick("context", "question") # Seleziona solo context e question per il prompt
         | PROMPT_TEMPLATE 
         | LLM
         | StrOutputParser()
-    )
+    ).with_config(run_name="ResponseGeneration")
     
-    # 3. Combiniamo le pipeline per restituire tutti i risultati necessari
-    # Usiamo RunnableParallel per restituire sia la risposta che i documenti
+    # 3. Catena Finale: Unisce la risposta con i documenti grezzi
+    # 🚨 CORREZIONE CHIAVE: L'input del dizionario della domanda deve essere
+    # eseguito attraverso una catena che produce sia la risposta che i documenti.
     full_chain = RunnableParallel(
         response=response_pipeline,
-        # Estrarre la lista dei documenti dalla 'context_pipeline'
-        context_docs=(lambda x: x['documents'])
-    )
+        # L'input è il dizionario {"question": "..."}. Eseguiamo la pipeline di setup
+        # su quell'input e poi estraiamo la chiave 'documents'.
+        context_docs=(lambda x: setup_and_retrieval.invoke(x)['documents'])
+    ).with_config(run_name="FullRAGChain")
 
     return full_chain
 
@@ -134,7 +141,6 @@ def get_rag_chain():
 class QueryRequest(BaseModel):
     question: str
 
-# Modificato per supportare la risposta del backend che ora è un dizionario più complesso
 class QueryResponse(BaseModel):
     response: str
     context_docs: int = 0
@@ -159,12 +165,8 @@ async def query_endpoint(req: QueryRequest):
     try:
         rag_chain = get_rag_chain()
         
-        # Eseguiamo l'intera catena LCEL con un solo invoke
-        # L'input è il dizionario atteso dalla catena: {"question": "..."}
+        # Eseguiamo l'intera catena LCEL
         result: Dict[str, Any] = rag_chain.invoke({"question": req.question})
-        
-        # L'output ora è un dizionario: 
-        # {'response': 'la risposta generata', 'context_docs': [Doc1, Doc2, ...]}
         
         return QueryResponse(
             response=result['response'].strip(),
@@ -172,13 +174,13 @@ async def query_endpoint(req: QueryRequest):
         )
         
     except HTTPException:
-        # Rilanciare le eccezioni HTTPException (come il 503)
+        # Rilanciare le eccezioni HTTPException (come il 503/400)
         raise
     except Exception as e:
-        # Questo catturerà eventuali errori rimanenti e l'errore 'dict' se si ripresenta
+        # Cattura e logga l'errore 500
         logger.error(f"Errore query finale: {e}")
         # Solleva la HTTPException in caso di fallimento
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Errore interno del server: {str(e)}")
 
 @app.get("/api/health")
 async def health_check():
