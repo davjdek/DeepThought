@@ -14,6 +14,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough 
 from langchain_core.runnables.base import RunnableSequence
+from langchain_openai import OpenAIEmbeddings
 
 # Importazioni specifiche di Gemini/Google
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
@@ -27,6 +28,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 # Configurazione API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY non configurata come variabile d'ambiente. Il RAG non si avvierà.")
 
@@ -62,14 +64,15 @@ def initialize_rag():
     global retriever
     
     try:
-        if not GEMINI_API_KEY or not LLM:
-            raise ValueError("Credenziali Gemini mancanti. Impossibile inizializzare LLM o Embeddings.")
-
+        # CONTROLLO: Usare OpenAI se Gemini fallisce per l'embedding
+        if not OPENAI_API_KEY:
+             raise ValueError("Credenziali OpenAI mancanti. Impossibile inizializzare Embeddings.")
+        
         # Configurazione embeddings
-        embeddings = GoogleGenerativeAIEmbeddings(
-             # 🛠️ CORREZIONE: Usare il nome modello corretto per embeddings
-             model="text-embedding-gecko", 
-             google_api_key=GEMINI_API_KEY,
+        embeddings = OpenAIEmbeddings(
+             # 🚨 SOSTITUZIONE: Usa il modello di embedding OpenAI 🚨
+             model="text-embedding-3-small", 
+             openai_api_key=OPENAI_API_KEY,
         )
         
         # Caricamento documenti

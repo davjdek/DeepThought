@@ -12,6 +12,7 @@ langchain-core==0.3.0
 langchain-community==0.3.0
 langchain-google-genai==2.0.1
 langchain-text-splitters==0.3.0
+langchain-openai
 
 # Vector Store - ChromaDB
 chromadb==0.6.0
