@@ -68,7 +68,7 @@ def initialize_rag():
         # Configurazione embeddings
         embeddings = GoogleGenerativeAIEmbeddings(
              # 🛠️ CORREZIONE: Usare il nome modello corretto per embeddings
-             model="gemini-2.5-flash", 
+             model="text-embedding-gecko", 
              google_api_key=GEMINI_API_KEY,
         )
         
