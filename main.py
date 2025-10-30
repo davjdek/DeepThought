@@ -3,11 +3,15 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+# LangChain Core/Community Imports
 from langchain_core.prompts import PromptTemplate 
-from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import RecursiveCharacterTextSplitter # <--- QUESTA È LA RIGA CORRETTA ORA
+from langchain_community.vectorstores import Chroma # <--- CAMBIATO DA FAISS A CHROMA
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+# Google SDK
 import google.generativeai as genai
 
 # Configurazione logging
@@ -20,8 +24,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # Configurazione API - USA VARIABILE D'AMBIENTE
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    # Solleva eccezione al di fuori dell'evento di startup per assicurare che il processo fallisca se manca la chiave
-    # Questo è vitale per la sicurezza e la configurazione corretta
     raise ValueError("GEMINI_API_KEY non configurata come variabile d'ambiente.")
 
 genai.configure(api_key=GEMINI_API_KEY)
@@ -30,7 +32,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 retriever = None
 
 def initialize_rag():
-    """Inizializza il sistema RAG"""
+    """Inizializza il sistema RAG utilizzando ChromaDB come Vector Store"""
     global retriever
     
     try:
@@ -51,15 +53,15 @@ def initialize_rag():
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
         
-        # Creazione vectorstore
-        vectorstore = FAISS.from_documents(splits, embeddings)
+        # Creazione vectorstore - USANDO CHROMA
+        # Chroma salva i dati in memoria/su disco, non ha bisogno di compilazione complessa
+        vectorstore = Chroma.from_documents(splits, embeddings) 
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
         
-        logger.info("Sistema RAG inizializzato con successo")
+        logger.info("Sistema RAG inizializzato con successo usando ChromaDB")
         
     except Exception as e:
         logger.error(f"Errore inizializzazione RAG. Il servizio rimarrà online ma l'endpoint /api/query non funzionerà: {e}")
-        # Manteniamo l'app in esecuzione anche se il RAG fallisce (stato 503 gestito nell'endpoint)
         pass 
 
 def query_gemini(prompt: str) -> str:
@@ -94,7 +96,6 @@ class QueryRequest(BaseModel):
 @app.post("/api/query")
 async def query_endpoint(req: QueryRequest):
     """Endpoint principale per le query"""
-    # Questo controllo è cruciale in caso l'inizializzazione RAG fallisca
     if not retriever:
         raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato. Controlla i log di Render per l'errore di inizializzazione.")
     
@@ -119,7 +120,6 @@ async def query_endpoint(req: QueryRequest):
 @app.get("/api/health")
 async def health_check():
     """Controllo stato sistema"""
-    # Restituisce lo stato del RAG, utile per il debug
     return {
         "status": "healthy",
         "rag_initialized": retriever is not None

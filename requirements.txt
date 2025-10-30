@@ -3,20 +3,19 @@ fastapi
 pydantic
 uvicorn
 
-# Google Gemini SDK (Risolve ModuleNotFoundError: google.generativeai)
+# Google Gemini SDK
 google-generativeai
 
-# LangChain - Componenti necessari per prompt, base RAG, community
+# LangChain - Core and Modular Components
 langchain
 langchain-core
 langchain-community
-
-# LangChain - Driver per Gemini (necessita di google-generativeai)
 langchain-google-genai
-
-# LangChain - Dipendenza separata per gli splitter di testo (Risolve l'errore precedente)
 langchain-text-splitters
 
-# LangChain - Vector Store e Loader
-faiss-cpu
+# NEW Vector Store - ChromaDB (pure Python, elimina gli errori di compilazione)
+chromadb
+hnswlib
+
+# Document Loader
 beautifulsoup4
