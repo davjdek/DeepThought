@@ -83,11 +83,7 @@ def initialize_rag():
              raise ValueError("Hugging Face API Token mancante. Impossibile inizializzare Embeddings.")
         
         # 🚨 CAMBIO DEL PROVIDER DI EMBEDDING A HUGGING FACE 🚨
-        embeddings = HuggingFaceEmbeddings(
-            # La classe HuggingFaceEmbeddings legge ancora la variabile d'ambiente
-            # HUGGINGFACEHUB_API_TOKEN automaticamente.
-            model_id='sentence-transformers/all-MiniLM-L12-v2' 
-        ) 
+        embeddings = HuggingFaceEmbeddings() 
         
         # Caricamento documenti
         loader = WebBaseLoader([
