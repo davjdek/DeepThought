@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # LangChain Core/Community Imports
 from langchain_core.prompts import ChatPromptTemplate
@@ -14,11 +14,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough 
 from langchain_core.runnables.base import RunnableSequence
-# RIMOZIONE DI OPENAI E HUGGING FACE
 
-# Importazioni specifiche di Gemini/Google
-# 🚨 IMPORTAZIONE CORRETTA
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
+# Importazioni dei Provider
+# ➡️ NUOVA IMPORTAZIONE PER EMBEDDING ➡️
+from langchain_cohere import CohereEmbeddings 
+# Importazione per LLM (Gemini)
+from langchain_google_genai import GoogleGenerativeAI
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -27,28 +28,42 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Configurazione API
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# --- Configurazione API ---
+# Chiavi di accesso lette dall'ambiente
+COHERE_API_KEY = os.getenv("COHERE_API_KEY") # Per l'Embedding (API Remota)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Per l'LLM
 
+# Controllo iniziale delle chiavi
 if not GEMINI_API_KEY:
-    logger.error("GEMINI_API_KEY non configurata come variabile d'ambiente. Il RAG non si avvierà.")
+    logger.error("GEMINI_API_KEY non configurata. L'LLM non funzionerà.")
+if not COHERE_API_KEY:
+    logger.error("COHERE_API_KEY non configurata. L'Embedding non funzionerà.")
 
-# Modello LLM
-LLM = None
+
+# --- Inizializzazione LLM ---
+LLM: Optional[GoogleGenerativeAI] = None
 try:
-    LLM = GoogleGenerativeAI(
-        model='gemini-2.5-flash',
-        google_api_key=GEMINI_API_KEY,
-        temperature=0.7
-    )
+    if GEMINI_API_KEY:
+        LLM = GoogleGenerativeAI(
+            model='gemini-2.5-flash',
+            google_api_key=GEMINI_API_KEY,
+            temperature=0.7
+        )
+    else:
+        logger.warning("LLM non inizializzato: Chiave Gemini mancante.")
 except Exception as e:
     logger.error(f"Errore inizializzazione LLM: {e}")
-    pass
 
-# Variabili globali
+# Variabile globale per il retriever
 retriever = None
 
-# Template per il prompt
+
+# --- Modello Pydantic per la Richiesta ---
+class QuestionRequest(BaseModel):
+    question: str
+
+
+# --- Template per il prompt ---
 PROMPT_TEMPLATE = ChatPromptTemplate.from_template("""
 Rispondi alla domanda usando il contesto fornito quando rilevante.
 Se il contesto non contiene informazioni pertinenti o sufficienti per rispondere, allora rispondi alla domanda usando la tua conoscenza generale.
@@ -59,19 +74,19 @@ Domanda: {question}
 """)
 
 
+# --- Funzione di Inizializzazione RAG ---
 def initialize_rag():
-    """Inizializza il sistema RAG utilizzando ChromaDB come Vector Store"""
+    """Inizializza il sistema RAG utilizzando ChromaDB e Cohere Embeddings (API remota)"""
     global retriever
     
     try:
-        # CONTROLLO FINALE: Se LLM è null, le credenziali sono fallite
-        if not GEMINI_API_KEY or not LLM:
-             raise ValueError("Credenziali Gemini mancanti o LLM fallito all'avvio.")
+        if not COHERE_API_KEY:
+             raise ValueError("Cohere API Key mancante. Impossibile inizializzare Embeddings.")
         
-        # 🚨 EMBEDDING REMOTO DI GEMINI 🚨
-        embeddings = GoogleGenerativeAIEmbeddings(
-             model="embedding-001", 
-             google_api_key=GEMINI_API_KEY,
+        # 🚨 EMBEDDING REMOTO CON COHERE 🚨
+        embeddings = CohereEmbeddings(
+            # La chiave viene letta automaticamente da COHERE_API_KEY nell'ambiente
+            model="embed-english-v3.0" # Modello di Cohere, altamente efficiente
         )
         
         # Caricamento documenti
@@ -87,32 +102,79 @@ def initialize_rag():
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
         
-        # Creazione vectorstore
+        # Creazione vectorstore (USA LA COHERE API, NON LA RAM LOCALE)
         vectorstore = Chroma.from_documents(splits, embeddings) 
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
         
-        logger.info("Sistema RAG inizializzato con successo usando Gemini Embeddings (API remota)")
+        logger.info("Sistema RAG inizializzato con successo usando Cohere Embeddings (API remota)")
         
     except Exception as e:
         logger.error(f"Errore inizializzazione RAG: {e}")
         retriever = None 
 
-# --- Funzioni di supporto per LCEL (RIMASTE INVARIATE) ---
-# ... (il resto del codice non è cambiato)
-# ...
 
-# Inizializzazione all'avvio
+# --- Funzioni di supporto per LCEL ---
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+# --- Endpoint principale ---
+@app.post("/ask", response_model=Dict[str, Any])
+async def ask_question(request: QuestionRequest):
+    if retriever is None:
+        # Se il RAG è fallito all'avvio (ad esempio, per una chiave mancante)
+        logger.warning("Retriever RAG non inizializzato. Uso solo l'LLM di base.")
+        
+        if LLM is None:
+            raise HTTPException(status_code=503, detail="LLM non inizializzato. Controlla GEMINI_API_KEY.")
+            
+        # Risposta base senza contesto
+        response = LLM.invoke(request.question)
+        return {"question": request.question, "answer": response, "source_documents": []}
+
+
+    # Definizione della catena RAG (se il retriever è inizializzato)
+    rag_chain = (
+        RunnableParallel(
+            context=(lambda x: x["question"]) | retriever | format_docs,
+            question=RunnablePassthrough(),
+        )
+        | PROMPT_TEMPLATE
+        | LLM
+        | StrOutputParser()
+    )
+
+    try:
+        # Recupera i documenti per il campo 'source_documents' del JSON di risposta
+        docs = retriever.invoke(request.question)
+        
+        # Esegue la catena RAG
+        answer = rag_chain.invoke({"question": request.question})
+        
+        return {
+            "question": request.question,
+            "answer": answer,
+            "source_documents": [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
+        }
+    
+    except Exception as e:
+        logger.error(f"Errore durante l'esecuzione della catena RAG: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore interno del server durante l'esecuzione del RAG: {e}")
+
+
+# --- Inizializzazione all'avvio ---
 @app.on_event("startup")
 async def startup_event():
-    # Inizializza il RAG solo se la chiave API è disponibile
-    if GEMINI_API_KEY:
+    # Inizializza il RAG solo se la chiave Cohere è disponibile
+    if COHERE_API_KEY:
         initialize_rag()
     else:
-        logger.warning("RAG non inizializzato: Chiave API Gemini mancante.")
+        logger.warning("RAG non inizializzato: Chiave API Cohere mancante.")
 
+
+# --- Esecuzione Uvicorn (per testing locale) ---
 if __name__ == "__main__":
     import uvicorn
-    import os
+    # Assicurati che PORT sia disponibile nell'ambiente per Render
     port = int(os.environ.get("PORT", 8000))
     logger.info(f"Avvio del server su http://0.0.0.0:{port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
