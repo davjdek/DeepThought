@@ -23,7 +23,7 @@ from langchain_core.runnables.base import RunnableSequence
 from langchain_google_genai import GoogleGenerativeAI
 
 # 🚨 NUOVO IMPORT: Hugging Face per l'embedding
-from langchain_huggingface import HuggingFaceHubEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -83,11 +83,11 @@ def initialize_rag():
              raise ValueError("Hugging Face API Token mancante. Impossibile inizializzare Embeddings.")
         
         # 🚨 CAMBIO DEL PROVIDER DI EMBEDDING A HUGGING FACE 🚨
-        embeddings = HuggingFaceHubEmbeddings(
-            # NON DEVI PASSARE api_key qui. La classe legge automaticamente la variabile
-            # HUGGINGFACEHUB_API_TOKEN dall'ambiente, a patto che sia impostata.
+        embeddings = HuggingFaceEmbeddings(
+            # La classe HuggingFaceEmbeddings legge ancora la variabile d'ambiente
+            # HUGGINGFACEHUB_API_TOKEN automaticamente.
             model='sentence-transformers/all-MiniLM-L12-v2' 
-)       
+        ) 
         
         # Caricamento documenti
         loader = WebBaseLoader([
