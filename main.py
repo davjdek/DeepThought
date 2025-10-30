@@ -3,11 +3,12 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate # <--- MODIFICA QUI
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings # <--- Aggiunta import mancante
 import google.generativeai as genai
 
 # Configurazione logging
@@ -33,14 +34,7 @@ def initialize_rag():
     
     try:
         # Configurazione embeddings
-        #embeddings = HuggingFaceEmbeddings(
-        #    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
-        #    model_kwargs={"device": "cpu"}
-        #)
-        
-          # --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
-        # Sfrutta la GEMINI_API_KEY per l'embedding tramite API.
-        # Questo elimina il download di modelli pesanti come i Sentence Transformers.
+        # --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
         embeddings = GoogleGenerativeAIEmbeddings(
              model="text-embedding-004",  # Modello di embedding consigliato
              api_key=GEMINI_API_KEY,      # Passa la chiave
@@ -48,12 +42,12 @@ def initialize_rag():
         
         # Caricamento documenti
         loader = WebBaseLoader([
-            "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
-            "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
+             "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
+             "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
         ])
         docs = loader.load()
         
-        # Divisione in chunks
+        # Divisione in chunks (text_splitter è ancora da langchain)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
         
@@ -72,11 +66,11 @@ def query_gemini(prompt: str) -> str:
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=200
-            )
+             prompt,
+             generation_config=genai.GenerationConfig(
+                 temperature=0.7,
+                 max_output_tokens=200
+             )
         )
         return response.text
     except Exception as e:
@@ -100,6 +94,7 @@ class QueryRequest(BaseModel):
 async def query_endpoint(req: QueryRequest):
     """Endpoint principale per le query"""
     if not retriever:
+        # Il codice è qui in alto per chiarezza, il logger.error è nel blocco except
         raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato")
     
     try:
@@ -108,6 +103,7 @@ async def query_endpoint(req: QueryRequest):
         context = "\n\n".join(doc.page_content for doc in docs)
         
         # Genera prompt e risposta
+        # NOTA: PromptTemplate viene ora importato da langchain_core.prompts
         prompt = PROMPT_TEMPLATE.format(context=context, question=req.question)
         response = query_gemini(prompt)
         
