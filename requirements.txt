@@ -8,6 +8,9 @@ langchain
 langchain-core
 langchain-community
 
+# LangChain - NUOVA DIPENDENZA PER GLI SPLITTER
+langchain-text-splitters
+
 # LangChain - Vector Store e Splitter specifici
 faiss-cpu
 beautifulsoup4
