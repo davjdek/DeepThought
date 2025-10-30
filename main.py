@@ -26,7 +26,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+ALLOWED_ORIGINS = [
+    "https://catalogo-messier-angular.onrender.com",  # Frontend production
+    "http://localhost:4200",  # Sviluppo locale Angular
+    "http://localhost:3000",  # Eventuale altro sviluppo locale
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+#app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- Configurazione API ---
 # Chiavi di accesso lette dall'ambiente
