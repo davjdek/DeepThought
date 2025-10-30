@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict, Any
 
 # LangChain Core/Community Imports
 from langchain_core.prompts import ChatPromptTemplate
@@ -12,6 +12,8 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
+# Aggiunto RunnableParallel per gestire output multipli in LCEL
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough 
 
 # Importazioni specifiche di Gemini/Google
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Configurazione API - USA VARIABILE D'AMBIENTE
+# Configurazione API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY non configurata come variabile d'ambiente. Il RAG non si avvierà.")
@@ -95,28 +97,44 @@ def format_docs(docs: List[Document]):
     return "\n\n".join(doc.page_content for doc in docs)
 
 def get_rag_chain():
-    """Crea e restituisce la catena RAG (LCEL)."""
+    """Crea e restituisce la catena RAG (LCEL) che restituisce risposta e documenti."""
     if not retriever:
-        # Se il retriever non è inizializzato, l'errore 503 verrà sollevato nell'endpoint
-        # Non è necessario sollevarlo qui, l'endpoint se ne occuperà.
-        pass
+        raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato.")
 
-    # Creazione della catena LCEL
-    rag_chain = (
-        # La funzione lambda x: x prende la domanda dal dizionario di invoke
-        # Il retriever viene eseguito prima di format_docs
-        {"context": retriever | format_docs, "question": lambda x: x['question']}
+    # 1. Pipeline di recupero e formattazione del contesto
+    context_pipeline = RunnableParallel(
+        # 'context' recupera i documenti e li formatta per il prompt
+        context=(lambda x: x['question']) | retriever | format_docs,
+        # 'documents' recupera i documenti e li restituisce (per il conteggio)
+        documents=(lambda x: x['question']) | retriever,
+        # 'question' semplicemente fa passare la domanda originale
+        question=RunnablePassthrough()
+    )
+
+    # 2. Pipeline di generazione della risposta
+    response_pipeline = (
+        context_pipeline 
         | PROMPT_TEMPLATE 
         | LLM
         | StrOutputParser()
     )
-    return rag_chain
+    
+    # 3. Combiniamo le pipeline per restituire tutti i risultati necessari
+    # Usiamo RunnableParallel per restituire sia la risposta che i documenti
+    full_chain = RunnableParallel(
+        response=response_pipeline,
+        # Estrarre la lista dei documenti dalla 'context_pipeline'
+        context_docs=(lambda x: x['documents'])
+    )
+
+    return full_chain
 
 # --- Modelli Pydantic ---
 
 class QueryRequest(BaseModel):
     question: str
 
+# Modificato per supportare la risposta del backend che ora è un dizionario più complesso
 class QueryResponse(BaseModel):
     response: str
     context_docs: int = 0
@@ -130,7 +148,7 @@ async def query_endpoint(req: QueryRequest):
     if not retriever:
         raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato. Controlla i log per l'errore di inizializzazione.")
     
-    # 🚨 LA CORREZIONE CHIAVE: Validazione del tipo di input per evitare l'errore 'dict'
+    # Validazione robusta (400 Bad Request)
     if not isinstance(req.question, str) or not req.question.strip():
         logger.error(f"Errore 400: La domanda non è una stringa valida: {req.question}")
         raise HTTPException(
@@ -139,23 +157,27 @@ async def query_endpoint(req: QueryRequest):
         )
     
     try:
-        # 1. Recupera documenti rilevanti (necessario per contare i docs e per la catena)
-        docs = retriever.get_relevant_documents(req.question)
-        
-        # 2. Genera prompt e risposta usando la catena LCEL
         rag_chain = get_rag_chain()
-
-        # Passiamo la domanda alla catena (che poi la passa al retriever e al prompt)
-        result = rag_chain.invoke({"question": req.question})
+        
+        # Eseguiamo l'intera catena LCEL con un solo invoke
+        # L'input è il dizionario atteso dalla catena: {"question": "..."}
+        result: Dict[str, Any] = rag_chain.invoke({"question": req.question})
+        
+        # L'output ora è un dizionario: 
+        # {'response': 'la risposta generata', 'context_docs': [Doc1, Doc2, ...]}
         
         return QueryResponse(
-            response=result.strip(),
-            context_docs=len(docs)
+            response=result['response'].strip(),
+            context_docs=len(result['context_docs'])
         )
         
+    except HTTPException:
+        # Rilanciare le eccezioni HTTPException (come il 503)
+        raise
     except Exception as e:
-        # Questo blocco ora gestirà qualsiasi errore rimanente (incluso il 500 originale)
-        logger.error(f"Errore query: {e}")
+        # Questo catturerà eventuali errori rimanenti e l'errore 'dict' se si ripresenta
+        logger.error(f"Errore query finale: {e}")
+        # Solleva la HTTPException in caso di fallimento
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/health")
@@ -190,6 +212,5 @@ if __name__ == "__main__":
     import uvicorn
     import os
     port = int(os.environ.get("PORT", 8000))
-    # Il log di avvio è importante per la diagnostica
     logger.info(f"Avvio del server su http://0.0.0.0:{port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
