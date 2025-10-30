@@ -14,7 +14,7 @@ langchain-google-genai==2.0.1  # Per l'LLM Gemini
 langchain-text-splitters==0.3.0
 
 # 🚀 Nuovo Provider di Embedding (Cohere)
-langchain-cohere==0.1.0
+langchain-cohere
 
 # Vector Store - ChromaDB
 chromadb==0.6.0

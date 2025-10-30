@@ -85,8 +85,9 @@ def initialize_rag():
         
         # 🚨 EMBEDDING REMOTO CON COHERE 🚨
         embeddings = CohereEmbeddings(
-            # La chiave viene letta automaticamente da COHERE_API_KEY nell'ambiente
-            model="embed-english-v3.0" # Modello di Cohere, altamente efficiente
+            model="embed-english-v3.0",
+            # Passa esplicitamente la chiave (anche se di solito viene letta dall'ambiente)
+            cohere_api_key=COHERE_API_KEY 
         )
         
         # Caricamento documenti
