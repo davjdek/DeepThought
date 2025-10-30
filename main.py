@@ -3,12 +3,11 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from langchain_core.prompts import PromptTemplate # <--- MODIFICA QUI
+from langchain_core.prompts import PromptTemplate 
 from langchain_community.vectorstores import FAISS
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter # <--- QUESTA È LA RIGA CORRETTA ORA
 from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings # <--- Aggiunta import mancante
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import google.generativeai as genai
 
 # Configurazione logging
@@ -21,7 +20,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # Configurazione API - USA VARIABILE D'AMBIENTE
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY non configurata")
+    # Solleva eccezione al di fuori dell'evento di startup per assicurare che il processo fallisca se manca la chiave
+    # Questo è vitale per la sicurezza e la configurazione corretta
+    raise ValueError("GEMINI_API_KEY non configurata come variabile d'ambiente.")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -34,10 +35,9 @@ def initialize_rag():
     
     try:
         # Configurazione embeddings
-        # --- MODIFICA CHIAVE: Uso degli Embedding di Google Gemini ---
         embeddings = GoogleGenerativeAIEmbeddings(
-             model="text-embedding-004",  # Modello di embedding consigliato
-             api_key=GEMINI_API_KEY,      # Passa la chiave
+             model="text-embedding-004",
+             api_key=GEMINI_API_KEY,
         )
         
         # Caricamento documenti
@@ -47,7 +47,7 @@ def initialize_rag():
         ])
         docs = loader.load()
         
-        # Divisione in chunks (text_splitter è ancora da langchain)
+        # Divisione in chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
         
@@ -58,8 +58,9 @@ def initialize_rag():
         logger.info("Sistema RAG inizializzato con successo")
         
     except Exception as e:
-        logger.error(f"Errore inizializzazione RAG: {e}")
-        raise
+        logger.error(f"Errore inizializzazione RAG. Il servizio rimarrà online ma l'endpoint /api/query non funzionerà: {e}")
+        # Manteniamo l'app in esecuzione anche se il RAG fallisce (stato 503 gestito nell'endpoint)
+        pass 
 
 def query_gemini(prompt: str) -> str:
     """Interroga l'API Gemini"""
@@ -93,9 +94,9 @@ class QueryRequest(BaseModel):
 @app.post("/api/query")
 async def query_endpoint(req: QueryRequest):
     """Endpoint principale per le query"""
+    # Questo controllo è cruciale in caso l'inizializzazione RAG fallisca
     if not retriever:
-        # Il codice è qui in alto per chiarezza, il logger.error è nel blocco except
-        raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato")
+        raise HTTPException(status_code=503, detail="Sistema RAG non inizializzato. Controlla i log di Render per l'errore di inizializzazione.")
     
     try:
         # Recupera documenti rilevanti
@@ -103,7 +104,6 @@ async def query_endpoint(req: QueryRequest):
         context = "\n\n".join(doc.page_content for doc in docs)
         
         # Genera prompt e risposta
-        # NOTA: PromptTemplate viene ora importato da langchain_core.prompts
         prompt = PROMPT_TEMPLATE.format(context=context, question=req.question)
         response = query_gemini(prompt)
         
@@ -119,6 +119,7 @@ async def query_endpoint(req: QueryRequest):
 @app.get("/api/health")
 async def health_check():
     """Controllo stato sistema"""
+    # Restituisce lo stato del RAG, utile per il debug
     return {
         "status": "healthy",
         "rag_initialized": retriever is not None
