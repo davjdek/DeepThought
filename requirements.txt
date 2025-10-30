@@ -8,7 +8,7 @@ google-generativeai==0.8.5
 
 # LangChain - Core and Modular Components (Versioni bloccate per stabilità)
 langchain==0.2.11
-langchain-core==0.2.22
+langchain-core==0.2.23
 langchain-community==0.2.9
 langchain-google-genai==3.0.0
 langchain-text-splitters==0.2.1
