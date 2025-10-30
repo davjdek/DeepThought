@@ -14,10 +14,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough 
 from langchain_core.runnables.base import RunnableSequence
-from langchain_openai import OpenAIEmbeddings
+
+# ❌ RIMOZIONE: OpenAIEmbeddings
+# from langchain_openai import OpenAIEmbeddings
 
 # Importazioni specifiche di Gemini/Google
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
+# ❌ RIMOZIONE: GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAI
+
+# 🚨 NUOVO IMPORT: Hugging Face per l'embedding
+from langchain_huggingface import HuggingFaceInferenceAPIEmbeddings
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -28,9 +34,16 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 # Configurazione API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# ❌ RIMOZIONE: OPENAI_API_KEY
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# 🚨 NUOVA CHIAVE RICHIESTA 🚨
+HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN") 
+
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY non configurata come variabile d'ambiente. Il RAG non si avvierà.")
+if not HUGGINGFACEHUB_API_TOKEN:
+    logger.error("HUGGINGFACEHUB_API_TOKEN non configurata. L'embedding non funzionerà.")
 
 # Modello LLM
 LLM = None
@@ -64,15 +77,16 @@ def initialize_rag():
     global retriever
     
     try:
-        # CONTROLLO: Usare OpenAI se Gemini fallisce per l'embedding
-        if not OPENAI_API_KEY:
-             raise ValueError("Credenziali OpenAI mancanti. Impossibile inizializzare Embeddings.")
+        if not GEMINI_API_KEY or not LLM:
+            raise ValueError("Credenziali Gemini mancanti. Impossibile inizializzare LLM.")
+        if not HUGGINGFACEHUB_API_TOKEN:
+             raise ValueError("Hugging Face API Token mancante. Impossibile inizializzare Embeddings.")
         
-        # Configurazione embeddings
-        embeddings = OpenAIEmbeddings(
-             # 🚨 SOSTITUZIONE: Usa il modello di embedding OpenAI 🚨
-             model="text-embedding-3-small", 
-             openai_api_key=OPENAI_API_KEY,
+        # 🚨 CAMBIO DEL PROVIDER DI EMBEDDING A HUGGING FACE 🚨
+        embeddings = HuggingFaceInferenceAPIEmbeddings(
+            api_key=HUGGINGFACEHUB_API_TOKEN,
+            # Modello di embedding leggero e performante
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         
         # Caricamento documenti
@@ -90,7 +104,7 @@ def initialize_rag():
         vectorstore = Chroma.from_documents(splits, embeddings) 
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
         
-        logger.info("Sistema RAG inizializzato con successo usando ChromaDB")
+        logger.info("Sistema RAG inizializzato con successo usando Hugging Face Embeddings")
         
     except Exception as e:
         logger.error(f"Errore inizializzazione RAG: {e}")
@@ -109,13 +123,9 @@ def get_rag_chain() -> RunnableSequence:
         raise Exception("Retriever non disponibile.")
 
     # 1. Pipeline di recupero e formattazione del contesto
-    # Mappa l'input {"question": "..."} in un dizionario con i componenti necessari
     setup_and_retrieval = RunnableParallel(
-        # Recupera e formatta i documenti
         context=(RunnablePassthrough() | retriever | format_docs),
-        # Recupera i documenti grezzi (per il conteggio)
         documents=(RunnablePassthrough() | retriever),
-        # Passa la domanda originale
         question=RunnablePassthrough(),
     ).with_config(run_name="SetupAndRetrieval")
     
@@ -128,12 +138,8 @@ def get_rag_chain() -> RunnableSequence:
     ).with_config(run_name="ResponseGeneration")
     
     # 3. Catena Finale: Unisce la risposta con i documenti grezzi
-    # 🚨 CORREZIONE CHIAVE: L'input del dizionario della domanda deve essere
-    # eseguito attraverso una catena che produce sia la risposta che i documenti.
     full_chain = RunnableParallel(
         response=response_pipeline,
-        # L'input è il dizionario {"question": "..."}. Eseguiamo la pipeline di setup
-        # su quell'input e poi estraiamo la chiave 'documents'.
         context_docs=(lambda x: setup_and_retrieval.invoke(x)['documents'])
     ).with_config(run_name="FullRAGChain")
 
@@ -208,10 +214,10 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     # Inizializza il RAG solo se la chiave API è disponibile
-    if GEMINI_API_KEY:
+    if GEMINI_API_KEY and HUGGINGFACEHUB_API_TOKEN:
         initialize_rag()
     else:
-        logger.warning("RAG non inizializzato: Chiave API Gemini mancante.")
+        logger.warning("RAG non inizializzato: Chiavi API mancanti (Gemini o HuggingFace).")
 
 if __name__ == "__main__":
     import uvicorn
