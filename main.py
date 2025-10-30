@@ -85,7 +85,7 @@ def initialize_rag():
         # 🚨 CAMBIO DEL PROVIDER DI EMBEDDING A HUGGING FACE 🚨
         embeddings = HuggingFaceEndpointEmbeddings(
             huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
-            model="sentence-transformers/all-MiniLM-L6-v2"
+            model="sentence-transformers/all-MiniLM-L12-v2"
         )
         
         # Caricamento documenti
