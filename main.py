@@ -29,7 +29,7 @@ app = FastAPI()
 ALLOWED_ORIGINS = [
     "https://catalogo-messier-angular.onrender.com",  # Frontend production
     "http://localhost:4200",  # Sviluppo locale Angular
-    "http://localhost:3000",  # Eventuale altro sviluppo locale
+    "http://localhost:80",  # Eventuale altro sviluppo locale
 ]
 
 app.add_middleware(
