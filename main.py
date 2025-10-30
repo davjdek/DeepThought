@@ -86,7 +86,7 @@ def initialize_rag():
         embeddings = HuggingFaceEmbeddings(
             # La classe HuggingFaceEmbeddings legge ancora la variabile d'ambiente
             # HUGGINGFACEHUB_API_TOKEN automaticamente.
-            model='sentence-transformers/all-MiniLM-L12-v2' 
+            model_id='sentence-transformers/all-MiniLM-L12-v2' 
         ) 
         
         # Caricamento documenti
