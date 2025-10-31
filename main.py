@@ -84,7 +84,8 @@ retriever = None
 # --- Modello Pydantic per la Richiesta ---
 class QuestionRequest(BaseModel):
     question: str
-
+    # Storico come lista di dizionari (es. [{"role": "user", "content": "Ciao"}, ...])
+    chat_history: List[Dict[str, str]] = []
 
 # --- Template per il prompt ---
 PROMPT_TEMPLATE = ChatPromptTemplate.from_template("""
@@ -95,6 +96,15 @@ Alla domanda 'qual è il senso della vita?' rispondi 42.
 Contesto: {context}
 Domanda: {question}
 """)
+CONDENSE_QUESTION_PROMPT = ChatPromptTemplate.from_template("""
+Dato lo storico della conversazione e la successiva domanda, riformula la domanda successiva come una domanda standalone (autonoma).
+Se non c'è storico, restituisci solo la domanda successiva.
+
+Storico della Conversazione:
+{chat_history}
+
+Domanda Successiva: {question}
+""")
 
 
 # --- Funzione di Inizializzazione RAG ---
@@ -102,6 +112,24 @@ def initialize_rag():
     """Inizializza il sistema RAG utilizzando ChromaDB e Cohere Embeddings (API remota)"""
     global retriever
     
+    # Nella funzione initialize_rag() o come variabile globale
+    if LLM:
+        history_aware_retriever = (
+            # 1. Combina storico e nuova domanda
+            RunnablePassthrough.assign(
+                chat_history=lambda x: format_chat_history(x["chat_history"])
+            )
+            # 2. Rielabora la domanda con l'LLM
+            | CONDENSE_QUESTION_PROMPT
+            | LLM
+            | StrOutputParser()
+            # 3. Usa la domanda riformulata per il recupero
+            | retriever
+        ).with_config(run_name="HistoryAwareRetriever")
+    else:
+        # Se LLM non è disponibile, usa il retriever standard come fallback
+        history_aware_retriever = retriever
+
     try:
         if not COHERE_API_KEY:
              raise ValueError("Cohere API Key mancante. Impossibile inizializzare Embeddings.")
@@ -176,6 +204,17 @@ def initialize_rag():
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
+def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
+    """Converte lo storico da lista di dict a stringa leggibile per il prompt."""
+    formatted_history = []
+    for message in chat_history:
+        role = message.get("role", "user").capitalize() # Utente o AI
+        content = message.get("content", "")
+        formatted_history.append(f"{role}: {content}")
+    return "\n".join(formatted_history)
+
+# Assicurati di chiamare format_chat_history(x["chat_history"]) nella tua catena.
+
 # --- Endpoint principale ---
 @app.post("/ask", response_model=Dict[str, Any])
 async def ask_question(request: QuestionRequest):
@@ -194,7 +233,8 @@ async def ask_question(request: QuestionRequest):
     # Definizione della catena RAG (se il retriever è inizializzato)
     rag_chain = (
         RunnableParallel(
-            context=(lambda x: x["question"]) | retriever | format_docs,
+            # Il retriever prende ora question E chat_history
+            context=history_aware_retriever | format_docs,
             question=RunnablePassthrough(),
         )
         | PROMPT_TEMPLATE
