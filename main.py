@@ -108,7 +108,7 @@ def initialize_rag():
         logger.info("Avvio caricamento documenti...")
         loader = WebBaseLoader([
              "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
-             "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
+             "https://it.wikipedia.org/wiki/Galassia_di_Andromeda",
              "https://www.codas.it/images/Catalogo%20di%20Messier%20(2).pdf"
         ])
         docs = loader.load()
