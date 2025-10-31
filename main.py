@@ -78,7 +78,8 @@ except Exception as e:
     logger.error(f"Errore inizializzazione LLM: {e}")
 
 # Variabile globale per il retriever
-retriever = None
+retriever: Optional[Any] = None # Retriever di base
+history_aware_retriever: Optional[RunnableSequence] = None # Retriever con memoria
 
 
 # --- Modello Pydantic per la Richiesta ---
@@ -106,30 +107,27 @@ Storico della Conversazione:
 Domanda Successiva: {question}
 """)
 
+# --- Funzioni di supporto per LCEL ---
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
+    """Converte lo storico da lista di dict a stringa leggibile per il prompt."""
+    formatted_history = []
+    for message in chat_history:
+        role = message.get("role", "user").capitalize() # Utente o AI
+        content = message.get("content", "")
+        formatted_history.append(f"{role}: {content}")
+    return "\n".join(formatted_history)
+
 
 # --- Funzione di Inizializzazione RAG ---
 def initialize_rag():
     """Inizializza il sistema RAG utilizzando ChromaDB e Cohere Embeddings (API remota)"""
     global retriever
-    
+    global history_aware_retriever # Rendiamo accessibile la variabile globale
     # Nella funzione initialize_rag() o come variabile globale
-    if LLM:
-        history_aware_retriever = (
-            # 1. Combina storico e nuova domanda
-            RunnablePassthrough.assign(
-                chat_history=lambda x: format_chat_history(x["chat_history"])
-            )
-            # 2. Rielabora la domanda con l'LLM
-            | CONDENSE_QUESTION_PROMPT
-            | LLM
-            | StrOutputParser()
-            # 3. Usa la domanda riformulata per il recupero
-            | retriever
-        ).with_config(run_name="HistoryAwareRetriever")
-    else:
-        # Se LLM non è disponibile, usa il retriever standard come fallback
-        history_aware_retriever = retriever
-
+    
     try:
         if not COHERE_API_KEY:
              raise ValueError("Cohere API Key mancante. Impossibile inizializzare Embeddings.")
@@ -192,33 +190,38 @@ def initialize_rag():
         # Creazione vectorstore (USA LA COHERE API, NON LA RAM LOCALE)
         vectorstore = Chroma.from_documents(splits, embeddings) 
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+
+        if LLM:
+            history_aware_retriever = (
+                # 1. Combina storico e nuova domanda
+                RunnablePassthrough.assign(
+                    chat_history=lambda x: format_chat_history(x["chat_history"])
+                )
+                # 2. Rielabora la domanda con l'LLM
+                | CONDENSE_QUESTION_PROMPT
+                | LLM
+                | StrOutputParser()
+                # 3. Usa la domanda riformulata per il recupero
+                | retriever
+            ).with_config(run_name="HistoryAwareRetriever")
+        else:
+            # Se LLM non è disponibile, usa il retriever standard come fallback
+            history_aware_retriever = retriever
+
         
         logger.info("Sistema RAG inizializzato con successo usando Cohere Embeddings (API remota)")
         
     except Exception as e:
         logger.error(f"Errore inizializzazione RAG: {e}")
         retriever = None 
+        history_aware_retriever = None
 
 
-# --- Funzioni di supporto per LCEL ---
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
-    """Converte lo storico da lista di dict a stringa leggibile per il prompt."""
-    formatted_history = []
-    for message in chat_history:
-        role = message.get("role", "user").capitalize() # Utente o AI
-        content = message.get("content", "")
-        formatted_history.append(f"{role}: {content}")
-    return "\n".join(formatted_history)
-
-# Assicurati di chiamare format_chat_history(x["chat_history"]) nella tua catena.
 
 # --- Endpoint principale ---
 @app.post("/ask", response_model=Dict[str, Any])
 async def ask_question(request: QuestionRequest):
-    if retriever is None:
+    if history_aware_retriever is None:
         # Se il RAG è fallito all'avvio (ad esempio, per una chiave mancante)
         logger.warning("Retriever RAG non inizializzato. Uso solo l'LLM di base.")
         
@@ -244,10 +247,10 @@ async def ask_question(request: QuestionRequest):
 
     try:
         # Recupera i documenti per il campo 'source_documents' del JSON di risposta
-        docs = retriever.invoke(request.question)
+        docs = history_aware_retriever.invoke(request.dict())
         
         # Esegue la catena RAG
-        answer = rag_chain.invoke({"question": request.question})
+        answer = rag_chain.invoke(request.dict())
         
         return {
             "question": request.question,
