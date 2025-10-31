@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import WebBaseLoader
+from langchain_community.document_loaders import WebBaseLoader, PyPDFLoader
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough 
 from langchain_core.runnables.base import RunnableSequence
 
@@ -20,6 +21,9 @@ from langchain_core.runnables.base import RunnableSequence
 from langchain_cohere import CohereEmbeddings 
 # Importazione per LLM (Gemini)
 from langchain_google_genai import GoogleGenerativeAI
+
+# URL del PDF
+pdf_url = "https://www.codas.it/images/Catalogo%20di%20Messier%20(2).pdf"
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -113,6 +117,41 @@ def initialize_rag():
         ])
         docs = loader.load()
         
+        # 2. Gestione del PDF in modo temporaneo
+        pdf_docs = []
+        logger.info("Avvio scaricamento e caricamento PDF temporaneo...")
+
+        try:
+            # Scarica il contenuto del PDF
+            response = requests.get(pdf_url)
+            response.raise_for_status()
+
+            # Crea un file temporaneo sul disco
+            # Lo aprirà, lo scriverà, e lo chiuderà automaticamente al termine del blocco 'with'
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(response.content)
+                temp_path = tmp_file.name
+            
+            # Usa PyPDFLoader con il percorso del file temporaneo
+            pdf_loader = PyPDFLoader(temp_path)
+            pdf_docs = pdf_loader.load()
+            logger.info(f"PDF caricato e analizzato. Documenti trovati: {len(pdf_docs)}")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Errore durante lo scaricamento del PDF: {e}")
+        except Exception as e:
+            logger.error(f"Errore durante l'analisi del PDF: {e}")
+
+        finally:
+            # IMPORTANTE: Pulisci il file temporaneo dopo averlo usato
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                os.remove(temp_path)
+                logger.info(f"File temporaneo eliminato: {temp_path}")
+
+        # 3. Unione dei documenti
+        docs = web_docs + pdf_docs
+        logger.info(f"Caricamento completato. Numero totale di documenti: {len(docs)}")
+
         # Divisione in chunks
         logger.info("Divisione in chunks e creazione Vector Store...")
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)

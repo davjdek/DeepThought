@@ -22,3 +22,4 @@ chromadb==0.6.0
 # Document Loader & Utilità
 beautifulsoup4==4.12.3
 requests
+pypdf
