@@ -23,6 +23,10 @@ from langchain_cohere import CohereEmbeddings
 # Importazione per LLM (Gemini)
 from langchain_google_genai import GoogleGenerativeAI
 
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
+
 # URL del PDF
 pdf_url = "https://www.codas.it/images/Catalogo%20di%20Messier%20(2).pdf"
 
@@ -123,7 +127,7 @@ def initialize_rag():
 
         try:
             # Scarica il contenuto del PDF
-            response = requests.get(pdf_url)
+            response = requests.get(pdf_url, headers=headers)
             response.raise_for_status()
 
             # Crea un file temporaneo sul disco
