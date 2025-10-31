@@ -119,7 +119,7 @@ def initialize_rag():
              "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
              "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"       
         ])
-        docs = loader.load()
+        web_docs = loader.load()
         
         # 2. Gestione del PDF in modo temporaneo
         pdf_docs = []
