@@ -189,7 +189,7 @@ def initialize_rag():
         
         # Creazione vectorstore (USA LA COHERE API, NON LA RAM LOCALE)
         vectorstore = Chroma.from_documents(splits, embeddings) 
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 50})
 
         if LLM:
             history_aware_retriever = (
@@ -221,10 +221,9 @@ def initialize_rag():
 # --- Endpoint principale ---
 @app.post("/ask", response_model=Dict[str, Any])
 async def ask_question(request: QuestionRequest):
-    if history_aware_retriever is None:
-        # Se il RAG è fallito all'avvio (ad esempio, per una chiave mancante)
-        logger.warning("Retriever RAG non inizializzato. Uso solo l'LLM di base.")
-        
+    if history_aware_retriever is None or LLM is None:
+        # Gestione fallback LLM (invariata)
+        # ...
         if LLM is None:
             raise HTTPException(status_code=503, detail="LLM non inizializzato. Controlla GEMINI_API_KEY.")
             
@@ -233,24 +232,29 @@ async def ask_question(request: QuestionRequest):
         return {"question": request.question, "answer": response, "source_documents": []}
 
 
-    # Definizione della catena RAG (se il retriever è inizializzato)
-    rag_chain = (
-        RunnableParallel(
-            # Il retriever prende ora question E chat_history
-            context=history_aware_retriever | format_docs,
-            question=RunnablePassthrough(),
-        )
-        | PROMPT_TEMPLATE
-        | LLM
-        | StrOutputParser()
-    )
-
     try:
-        # Recupera i documenti per il campo 'source_documents' del JSON di risposta
+        # 1. RECUPERA I DOCUMENTI UNA SOLA VOLTA (USANDO IL RETRIEVER HISTORY-AWARE)
+        # L'input è il dizionario completo che contiene 'question' e 'chat_history'
         docs = history_aware_retriever.invoke(request.dict())
         
-        # Esegue la catena RAG
-        answer = rag_chain.invoke(request.dict())
+        # 2. DEFINISCI LA CATENA RAG CHE AGISCE SUI DOCUMENTI GIÀ RECUPERATI
+        rag_chain_from_docs = (
+            RunnableParallel(
+                # Prepara il contesto usando i documenti 'docs'
+                context=lambda x: format_docs(x["docs"]), 
+                question=RunnablePassthrough(),
+            )
+            | PROMPT_TEMPLATE
+            | LLM
+            | StrOutputParser()
+        )
+        
+        # 3. PREPARA L'INPUT PER LA CATENA DI GENERAZIONE
+        # Passiamo i documenti recuperati e la domanda
+        rag_input = {"docs": docs, "question": request.question}
+
+        # 4. ESEGUI LA CATENA DI GENERAZIONE
+        answer = rag_chain_from_docs.invoke(rag_input)
         
         return {
             "question": request.question,
