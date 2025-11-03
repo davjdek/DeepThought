@@ -217,6 +217,9 @@ def initialize_rag():
         history_aware_retriever = None
 
 
+@app.get("/")
+def read_root():
+    return {"message": "API RAG Catalogo Messier è online"}
 
 # --- Endpoint principale ---
 @app.post("/ask", response_model=Dict[str, Any])
