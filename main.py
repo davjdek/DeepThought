@@ -93,7 +93,8 @@ PROMPT_TEMPLATE = ChatPromptTemplate.from_template("""
 Rispondi alla domanda usando il contesto fornito quando rilevante.
 Se il contesto non contiene informazioni pertinenti o sufficienti per rispondere, allora rispondi alla domanda usando la tua conoscenza generale.
 Alla domanda 'qual è il senso della vita?' rispondi 42.
-
+Storico della Conversazione:
+{chat_history}
 Contesto: {context}
 Domanda: {question}
 """)
@@ -246,6 +247,7 @@ async def ask_question(request: QuestionRequest):
                 # Prepara il contesto usando i documenti 'docs'
                 context=lambda x: format_docs(x["docs"]), 
                 question=RunnablePassthrough(),
+                chat_history=lambda x: format_chat_history(request.chat_history),
             )
             | PROMPT_TEMPLATE
             | LLM
