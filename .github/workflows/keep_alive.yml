@@ -1,0 +1,11 @@
+name: Wake up Bot
+on:
+  schedule:
+    # Esegue ogni 10 minuti, dalle 08:00 alle 22:00 UTC
+    - cron: '*/10 8-22 * * *'
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render
+        run: curl -s https://tuo-bot.onrender.com > /dev/null
