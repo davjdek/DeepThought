@@ -40,6 +40,7 @@ ALLOWED_ORIGINS = [
     "http://localhost:4200",  # Sviluppo locale Angular
     "http://localhost:80",  # Eventuale altro sviluppo locale
     "http://localhost",
+    "https://2025sacquegna.iftscnosfapbologna.it",
 ]
 
 app.add_middleware(
