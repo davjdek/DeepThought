@@ -1,8 +1,8 @@
 name: Wake up Bot
 on:
   schedule:
-    # Esegue ogni 10 minuti, dalle 08:00 alle 23:00 circa (ora italiana)
     - cron: '*/10 6-21 * * *'
+    - cron: '5,15,25,35,45,55 6-21 * * *'
   workflow_dispatch: # <--- QUESTA RIGA SBLOCCA IL TASTO "RUN WORKFLOW"
 
 jobs:
