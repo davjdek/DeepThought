@@ -8,4 +8,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Render
-        run: curl -s https://tuo-bot.onrender.com > /dev/null
+        run: curl -s https://deepthought-4ywi.onrender.com > /dev/null
