@@ -1,8 +1,10 @@
 name: Wake up Bot
 on:
   schedule:
-    # Esegue ogni 10 minuti, dalle 08:00 alle 22:00 UTC
-    - cron: '*/10 8-22 * * *'
+    # Esegue ogni 10 minuti, dalle 08:00 alle 23:00 circa (ora italiana)
+    - cron: '*/10 6-21 * * *'
+  workflow_dispatch: # <--- QUESTA RIGA SBLOCCA IL TASTO "RUN WORKFLOW"
+
 jobs:
   ping:
     runs-on: ubuntu-latest
