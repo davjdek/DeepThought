@@ -191,7 +191,7 @@ def initialize_rag():
         
         # Creazione vectorstore (USA LA COHERE API, NON LA RAM LOCALE)
         vectorstore = Chroma.from_documents(splits, embeddings) 
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 200})
 
         if LLM:
             history_aware_retriever = (
