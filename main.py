@@ -81,7 +81,7 @@ LLM: Optional[GoogleGenerativeAI] = None
 try:
     if GEMINI_API_KEY:
         LLM = GoogleGenerativeAI(
-            model='gemini-2.5-flash',
+            model="gemini-2.5-flash-lite",
             google_api_key=GEMINI_API_KEY,
             temperature=0.7
         )
