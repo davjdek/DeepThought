@@ -378,7 +378,7 @@ async def startup_event():
         initialize_rag()
     else:
         logger.warning("RAG non inizializzato: chiave API Cohere mancante.")
- asyncio.create_task(self_ping())
+    asyncio.create_task(self_ping())
 
 # ---------------------------------------------------------------------------
 # Esecuzione locale
