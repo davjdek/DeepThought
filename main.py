@@ -21,6 +21,10 @@ from langchain.retrievers import ContextualCompressionRetriever
 from langchain_cohere import CohereEmbeddings, CohereRerank
 from langchain_google_genai import GoogleGenerativeAI
 
+# Importazioni necessarie per il self ping
+import httpx
+from datetime import datetime, timezone, timedelta
+
 # ---------------------------------------------------------------------------
 # Configurazione base
 # ---------------------------------------------------------------------------
@@ -153,6 +157,31 @@ def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
         content = message.get("content", "")
         lines.append(f"{role}: {content}")
     return "\n".join(lines)
+
+# ---------------------------------------------------------------------------
+# Self Ping
+# ---------------------------------------------------------------------------
+async def self_ping():
+    """
+    Autopinga il servizio ogni 10 minuti per evitare lo spin-down di Render.
+    Attivo solo dalle 7:00 alle 23:00 (ora italiana) per non sprecare risorse di notte.
+    """
+    url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000") + "/"
+    rome = timezone(timedelta(hours=2))  # UTC+2 ora legale, regola a +1 in inverno
+
+    while True:
+        await asyncio.sleep(600)  # attendi 10 minuti
+        ora = datetime.now(rome).hour
+
+        if 7 <= ora < 23:
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.get(url, timeout=10)
+                logger.info(f"Self-ping eseguito ({ora}:xx).")
+            except Exception as e:
+                logger.warning(f"Self-ping fallito: {e}")
+        else:
+            logger.info(f"Self-ping saltato, fuori fascia oraria ({ora}:xx).")
 
 # ---------------------------------------------------------------------------
 # Inizializzazione RAG
@@ -349,7 +378,7 @@ async def startup_event():
         initialize_rag()
     else:
         logger.warning("RAG non inizializzato: chiave API Cohere mancante.")
-
+ asyncio.create_task(self_ping())
 
 # ---------------------------------------------------------------------------
 # Esecuzione locale
