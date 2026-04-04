@@ -226,28 +226,7 @@ def initialize_rag():
                 "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
             ])
             web_docs = loader.load()
-"""
-            # 2. PDF remoto (file temporaneo)
-            pdf_docs = []
-            temp_path = None
-            try:
-                response = requests.get(PDF_URL, headers=headers)
-                response.raise_for_status()
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                    tmp_file.write(response.content)
-                    temp_path = tmp_file.name
-                pdf_loader = PyPDFLoader(temp_path)
-                pdf_docs = pdf_loader.load()
-                logger.info(f"PDF caricato: {len(pdf_docs)} pagine.")
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Errore download PDF: {e}")
-            except Exception as e:
-                logger.error(f"Errore parsing PDF: {e}")
-            finally:
-                if temp_path and os.path.exists(temp_path):
-                    os.remove(temp_path)
-                    logger.info("File temporaneo PDF eliminato.")
-"""
+
             # 2. PDF remoti (file temporanei) — scarica tutti gli URL definiti
             pdf_docs = []
             for pdf_url in [PDF_URL, KB_URL]:
