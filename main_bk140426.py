@@ -20,7 +20,7 @@ from langchain.retrievers import ContextualCompressionRetriever
 
 # Importazioni dei Provider
 from langchain_cohere import CohereEmbeddings, CohereRerank
-from langchain_groq import ChatGroq
+from langchain_google_genai import GoogleGenerativeAI
 
 # Importazioni necessarie per il self ping
 import httpx
@@ -72,10 +72,10 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if not GROQ_API_KEY:
-    logger.error("GROQ_API_KEY non configurata. L'LLM non funzionerà.")
+if not GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY non configurata. L'LLM non funzionerà.")
 if not COHERE_API_KEY:
     logger.error("COHERE_API_KEY non configurata. Embedding e Rerank non funzioneranno.")
 
@@ -83,26 +83,26 @@ if not COHERE_API_KEY:
 # Inizializzazione LLM
 # ---------------------------------------------------------------------------
 
-LLM: Optional[ChatGroq] = None
-
-if GROQ_API_KEY:
-    try:
-        LLM = ChatGroq(
-            model="llama-3.1-8b-instant",
-            api_key=GROQ_API_KEY,
+LLM: Optional[GoogleGenerativeAI] = None
+try:
+    if GEMINI_API_KEY:
+        LLM = GoogleGenerativeAI(
+            model="gemini-3.1-flash-lite-preview",
+            google_api_key=GEMINI_API_KEY,
             temperature=0.7
         )
-        logger.info("LLM inizializzato: Groq llama-3.1-8b-instant")
-    except Exception as e:
-        logger.error(f"Errore inizializzazione LLM: {e}")
-else:
-    logger.warning("LLM non inizializzato: chiave Groq mancante.")
+    else:
+        logger.warning("LLM non inizializzato: chiave Gemini mancante.")
+except Exception as e:
+    logger.error(f"Errore inizializzazione LLM: {e}")
 
 # ---------------------------------------------------------------------------
 # Variabili globali retriever
 # ---------------------------------------------------------------------------
 
+# Retriever finale (base + rerank)
 retriever: Optional[Any] = None
+# Retriever history-aware (condensa domanda + retriever finale)
 history_aware_retriever: Optional[RunnableSequence] = None
 
 # ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ REGOLE RIGIDE:
 3. Se un'informazione specifica (come un prezzo esatto) non è presente, dai una risposta orientativa basata sulla tua esperienza (per esempio spiegando da quali fattori può dipendere il prezzo finale) e invita l'utente a fare un'analisi approfondita con te.
 4. Usa il "io" (es. "Io mi occupo di...", "Nel mio approccio...") invece di parlare in terza persona se ti riferisci a Davide.
 5. Per approfondimenti, invita l'utente a scriverti da questa pagina: https://2025sacquegna.iftscnosfapbologna.it/portfolio/contatti
-6. BREVITÀ: Rispondi in massimo 4-5 frasi brevi. Sii sintetico e vai dritto al punto.
+6- BREVITÀ: Rispondi in massimo 4-5 frasi brevi. Sii sintetico e vai dritto al punto.
 7. LINK CLICCABILE: Se fornisci un link, usa il formato Markdown: [testo del link](url).
 8. LINGUA: Rispondi SEMPRE nella stessa lingua usata dall'utente. Se la domanda è in inglese, traduci le informazioni del contesto e rispondi in inglese.
 
@@ -164,6 +164,7 @@ def format_docs(docs) -> str:
 
 
 def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
+    """Converte lo storico da lista di dict a stringa leggibile per il prompt."""
     lines = []
     for message in chat_history:
         role = message.get("role", "user").capitalize()
@@ -174,13 +175,16 @@ def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
 # ---------------------------------------------------------------------------
 # Self Ping
 # ---------------------------------------------------------------------------
-
 async def self_ping():
+    """
+    Autopinga il servizio ogni 10 minuti per evitare lo spin-down di Render.
+    Attivo solo dalle 7:00 alle 23:00 (ora italiana) per non sprecare risorse di notte.
+    """
     url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000") + "/"
-    rome = timezone(timedelta(hours=2))
+    rome = timezone(timedelta(hours=2))  # UTC+2 ora legale, regola a +1 in inverno
 
     while True:
-        await asyncio.sleep(600)
+        await asyncio.sleep(600)  # attendi 10 minuti
         ora = datetime.now(rome).hour
 
         if 7 <= ora < 23:
@@ -198,17 +202,27 @@ async def self_ping():
 # ---------------------------------------------------------------------------
 
 def initialize_rag():
+    """
+    Inizializza il sistema RAG con:
+    - Cohere Embeddings (remoto, multilingua)
+    - ChromaDB persistente su disco
+    - Retriever base con k=20
+    - CohereRerank per selezionare i top_n=5 chunk più rilevanti
+    - History-aware retriever (bypassa la condensazione se lo storico è vuoto)
+    """
     global retriever, history_aware_retriever
 
     try:
         if not COHERE_API_KEY:
             raise ValueError("Cohere API Key mancante. Impossibile inizializzare Embeddings.")
 
+        # --- Embeddings ---
         embeddings = CohereEmbeddings(
             model="embed-multilingual-v3.0",
             cohere_api_key=COHERE_API_KEY
         )
 
+        # --- Vectorstore: carica da disco se già esistente, altrimenti crea ---
         if os.path.exists(CHROMA_PERSIST_DIR) and os.listdir(CHROMA_PERSIST_DIR):
             logger.info("Caricamento ChromaDB esistente da disco...")
             vectorstore = Chroma(
@@ -218,12 +232,14 @@ def initialize_rag():
         else:
             logger.info("ChromaDB non trovato. Avvio caricamento documenti e indicizzazione...")
 
+            # 1. Documenti web
             loader = WebBaseLoader([
                 "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
                 "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
             ])
             web_docs = loader.load()
 
+            # 2. PDF remoti (file temporanei) — scarica tutti gli URL definiti
             pdf_docs = []
             for pdf_url in [PDF_URL, KB_URL]:
                 temp_path = None
@@ -247,6 +263,8 @@ def initialize_rag():
                         os.remove(temp_path)
                         logger.info(f"File temporaneo eliminato: {temp_path}")
 
+            
+            # 3. Unione e split
             all_docs = web_docs + pdf_docs
             logger.info(f"Totale documenti caricati: {len(all_docs)}")
 
@@ -257,6 +275,7 @@ def initialize_rag():
             splits = text_splitter.split_documents(all_docs)
             logger.info(f"Totale chunk creati: {len(splits)}")
 
+            # 4. Creazione vectorstore persistente
             vectorstore = Chroma.from_documents(
                 splits,
                 embeddings,
@@ -264,19 +283,23 @@ def initialize_rag():
             )
             logger.info("ChromaDB creato e salvato su disco.")
 
+        # --- Retriever base: recupera i 20 candidati ---
         base_retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
 
+        # --- Reranker Cohere: seleziona i 5 più rilevanti tra i 20 ---
         reranker = CohereRerank(
             cohere_api_key=COHERE_API_KEY,
             model="rerank-multilingual-v3.0",
             top_n=5
         )
 
+        # --- Retriever finale: base + rerank ---
         retriever = ContextualCompressionRetriever(
             base_compressor=reranker,
             base_retriever=base_retriever
         )
 
+        # --- History-aware retriever ---
         if LLM:
             history_aware_retriever = (
                 RunnablePassthrough.assign(
@@ -308,10 +331,11 @@ def read_root():
 
 @app.post("/ask", response_model=Dict[str, Any])
 async def ask_question(request: QuestionRequest):
+    # Fallback: se il RAG non è disponibile ma l'LLM sì, risponde senza contesto
     if LLM is None:
         raise HTTPException(
             status_code=503,
-            detail="LLM non inizializzato. Controlla GROQ_API_KEY."
+            detail="LLM non inizializzato. Controlla GEMINI_API_KEY."
         )
 
     if retriever is None or history_aware_retriever is None:
@@ -320,15 +344,18 @@ async def ask_question(request: QuestionRequest):
         return {"question": request.question, "answer": answer, "source_documents": []}
 
     try:
+        # 1. RECUPERO DOCUMENTI
+        # Bypass della condensazione LLM se lo storico è vuoto → risparmio di latenza
         if not request.chat_history:
             docs = retriever.invoke(request.question)
         else:
             docs = history_aware_retriever.invoke(request.dict())
 
+        # 2. CATENA DI GENERAZIONE
         rag_chain = (
             RunnableParallel(
                 context=lambda x: format_docs(x["docs"]),
-                question=lambda x: x["question"],
+                question=lambda x: x["question"],           # ✅ Fix: estrae solo la domanda
                 chat_history=lambda x: format_chat_history(x["chat_history"]),
             )
             | PROMPT_TEMPLATE
@@ -336,6 +363,7 @@ async def ask_question(request: QuestionRequest):
             | StrOutputParser()
         )
 
+        # 3. ESECUZIONE
         answer = rag_chain.invoke({
             "docs": docs,
             "question": request.question,
