@@ -87,7 +87,7 @@ LLM: Optional[ChatGroq] = None
 if GROQ_API_KEY:
     try:
         LLM = ChatGroq(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             api_key=GROQ_API_KEY,
             temperature=0.7,
             model_kwargs={
