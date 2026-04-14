@@ -89,11 +89,11 @@ if GROQ_API_KEY:
         LLM = ChatGroq(
             model="llama-3.3-70b-versatile",
             api_key=GROQ_API_KEY,
-            temperature=0.7,
+            temperature=0.6,
             model_kwargs={
                 "top_p": 0.9,
-                "presence_penalty": 0.8,
-                "frequency_penalty": 0.8
+                "presence_penalty": 0.3,  # Abbassalo (era 0.8)
+                "frequency_penalty": 0.3  # Abbassalo (era 0.8)
             }
         )
         logger.info("LLM inizializzato: Groq llama-3.1-8b-instant")
