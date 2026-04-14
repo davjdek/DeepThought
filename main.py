@@ -228,7 +228,7 @@ def initialize_rag():
             logger.info("ChromaDB non trovato. Avvio caricamento documenti e indicizzazione...")
 
             loader = WebBaseLoader([
-                "https://2025Sacquegna.cnosfapbologna.it/portfolio/progetti",
+                "https://2025Sacquegna.iftscnosfapbologna.it/portfolio/progetti",
             ])
             web_docs = loader.load()
 
