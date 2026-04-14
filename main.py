@@ -73,7 +73,6 @@ app.add_middleware(
 
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY non configurata. L'LLM non funzionerà.")
@@ -84,20 +83,18 @@ if not COHERE_API_KEY:
 # Inizializzazione LLM
 # ---------------------------------------------------------------------------
 
-
-
-
-if GROQ_API_KEY:
-        try:
-            candidate = ChatGroq(
-                model="llama-3.1-8b-instant",
-                api_key=GROQ_API_KEY,
-                temperature=0.7
-            )
-            candidate.invoke("test")
-            logger.info("LLM inizializzato: Groq llama-3.1-8b-instant")
-        except Exception as e:
-            logger.warning(f"Groq non disponibile: {e}")
+LLM: Optional[GoogleGenerativeAI] = None
+try:
+    if GEMINI_API_KEY:
+        LLM = GoogleGenerativeAI(
+            model="gemini-3.1-flash-lite-preview",
+            google_api_key=GEMINI_API_KEY,
+            temperature=0.7
+        )
+    else:
+        logger.warning("LLM non inizializzato: chiave Gemini mancante.")
+except Exception as e:
+    logger.error(f"Errore inizializzazione LLM: {e}")
 
 # ---------------------------------------------------------------------------
 # Variabili globali retriever
