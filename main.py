@@ -38,7 +38,6 @@ headers = {
     )
 }
 
-PDF_URL = "https://www.codas.it/images/Catalogo%20di%20Messier%20(2).pdf"
 KB_URL = "https://drive.google.com/uc?export=download&id=1YIDVQmldy2efy3tTwkJwP-sEtTglmnpn"
 CHROMA_PERSIST_DIR = "./chroma_db"
 
@@ -233,7 +232,7 @@ def initialize_rag():
             web_docs = loader.load()
 
             pdf_docs = []
-            for pdf_url in [PDF_URL, KB_URL]:
+            for pdf_url in [KB_URL]:
                 temp_path = None
                 try:
                     logger.info(f"Download PDF: {pdf_url}")
