@@ -90,11 +90,11 @@ if GROQ_API_KEY:
         LLM = ChatGroq(
             model="llama-3.1-8b-instant",
             api_key=GROQ_API_KEY,
-            temperature=0.6,
+            temperature=0.7,
             model_kwargs={
                 "top_p": 0.9,
-                "presence_penalty": 0.7,
-                "frequency_penalty": 0.7
+                "presence_penalty": 0.8,
+                "frequency_penalty": 0.8
             }
         )
         logger.info("LLM inizializzato: Groq llama-3.1-8b-instant")
@@ -125,6 +125,7 @@ class QuestionRequest(BaseModel):
 PROMPT_TEMPLATE = ChatPromptTemplate.from_template("""
 Rispondi alla domanda usando il contesto fornito quando rilevante, ma senza menzionare esplicitamente il "contesto fornito".
 
+
 Sei l'assistente di Davide, un esperto professionista di sviluppo web e SEO. 
 Usa le seguenti informazioni per rispondere alla domanda dell'utente in modo naturale, diretto e cordiale.
 
@@ -136,18 +137,19 @@ REGOLE RIGIDE:
 5. Per approfondimenti, invita l'utente a scriverti dalla pagina dei contatti. Usa il markdown [contatti](https://2025sacquegna.iftscnosfapbologna.it/portfolio/contatti)
 6. BREVITÀ: Rispondi in massimo 4-5 frasi brevi. Sii sintetico e vai dritto al punto. Non ripetere più volte la stessa risposta.
 7. LINK CLICCABILE: Se fornisci un link, usa il formato Markdown: [testo del link](url). Il testo del link rendilo breve (una o due parole)
-8. LINGUA: Rispondi SEMPRE nella stessa lingua usata dall'utente. Se la domanda è in inglese, traduci le informazioni del contesto e rispondi in inglese.
+8. LINGUA: Rispondi SEMPRE nella STESSA LINGUA usata dall'utente nell'ultima domanda. Se l'utente scrive in inglese, ignora l'italiano del contesto e rispondi ESCLUSIVAMENTE in inglese.
 9. Quando ti viene chiesto se sei un chatbot, ammetti di essere un assistente virtuale e non una persona vera. Non dire "sono un chatbot specializzato..." ma "sono l'assistente virtuale di Davide Sacquegna, specializzato..."
 
 Alla domanda 'qual è il senso della vita?' rispondi 42.
 
-Storico della Conversazione:
+Storico della Conversazione (usa questo solo per il contesto):
 {chat_history}
 
 Contesto:
 {context}
 
-Domanda: {question}
+DOMANDA ATTUALE (rispondi a questa):  
+{question}
 """)
 
 CONDENSE_QUESTION_PROMPT = ChatPromptTemplate.from_template("""
@@ -170,16 +172,12 @@ def format_docs(docs) -> str:
 
 
 def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
-    lines = []
-    for message in chat_history:
-        # Assicuriamoci di mappare correttamente i ruoli
-        role = message.get("role", "user")
-        content = message.get("content", "")
-        if role == "user":
-            lines.append(f"Utente: {content}")
-        else:
-            lines.append(f"Davide: {content}")
-    return "\n".join(lines)
+    formatted = ""
+    for msg in chat_history:
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        content = msg.get("content")
+        formatted += f"\n--- {role} ---\n{content}\n"
+    return formatted
 
 # ---------------------------------------------------------------------------
 # Self Ping
@@ -333,7 +331,11 @@ async def ask_question(request: QuestionRequest):
         if not request.chat_history:
             docs = retriever.invoke(request.question)
         else:
-            docs = history_aware_retriever.invoke(request.dict())
+            # Passa solo le chiavi necessarie
+            docs = history_aware_retriever.invoke({
+                "question": request.question,
+                "chat_history": request.chat_history
+            })
 
         rag_chain = (
             RunnableParallel(
