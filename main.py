@@ -259,8 +259,8 @@ def initialize_rag():
             logger.info(f"Totale documenti caricati: {len(all_docs)}")
 
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200
+                chunk_size=600,
+                chunk_overlap=100
             )
             splits = text_splitter.split_documents(all_docs)
             logger.info(f"Totale chunk creati: {len(splits)}")
@@ -272,12 +272,12 @@ def initialize_rag():
             )
             logger.info("ChromaDB creato e salvato su disco.")
 
-        base_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+        base_retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
 
         reranker = CohereRerank(
             cohere_api_key=COHERE_API_KEY,
             model="rerank-multilingual-v3.0",
-            top_n=5
+            top_n=3
         )
 
         retriever = ContextualCompressionRetriever(
