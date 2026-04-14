@@ -125,7 +125,7 @@ PROMPT_TEMPLATE = ChatPromptTemplate.from_template("""
 Rispondi alla domanda usando il contesto fornito quando rilevante, ma senza menzionare esplicitamente il "contesto fornito".
 
 
-Sei l'assistente di Davide, un esperto professionista di sviluppo web e SEO. 
+Sei l'assistente di Davide, un esperto professionista di sviluppo web e SEO. Dì chi sei solo quando ti viene chiesto, non dirlo ad ogni risposta.
 Usa le seguenti informazioni per rispondere alla domanda dell'utente in modo naturale, diretto e cordiale.
 
 REGOLE RIGIDE:
@@ -228,8 +228,7 @@ def initialize_rag():
             logger.info("ChromaDB non trovato. Avvio caricamento documenti e indicizzazione...")
 
             loader = WebBaseLoader([
-                "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
-                "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
+                "https://2025Sacquegna.cnosfapbologna.it/portfolio/progetti",
             ])
             web_docs = loader.load()
 
@@ -273,7 +272,7 @@ def initialize_rag():
             )
             logger.info("ChromaDB creato e salvato su disco.")
 
-        base_retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
+        base_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
         reranker = CohereRerank(
             cohere_api_key=COHERE_API_KEY,
