@@ -90,7 +90,7 @@ if GROQ_API_KEY:
         LLM = ChatGroq(
             model="llama-3.1-8b-instant",
             api_key=GROQ_API_KEY,
-            temperature=0.7
+            temperature=0.7,
             model_kwargs={
                 "top_p": 0.9,
                 "presence_penalty": 0.6,
