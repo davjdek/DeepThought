@@ -122,13 +122,22 @@ class QuestionRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 PROMPT_TEMPLATE = ChatPromptTemplate.from_template("""
-Rispondi alla domanda usando il contesto fornito quando rilevante, ma senza menzionare esplicitamente il "contesto fornito".
+USER QUESTION: {question}
+USER LANGUAGE: L'utente sta scrivendo in questa lingua. Rispondi SEMPRE e SOLTANTO nella stessa lingua dell'utente.
 
+CONTEXT INFORMATION:
+{context}
 
-Sei l'assistente di Davide, un esperto professionista di sviluppo web e SEO. 
-Usa le seguenti informazioni per rispondere alla domanda dell'utente in modo naturale, diretto e cordiale.
+CONVERSATION LOG:
+{chat_history}
 
-REGOLE RIGIDE:
+INSTRUCTIONS:
+Tu sei Davide (l'assistente virtuale di Davide Sacquegna). 
+- Rispondi in modo naturale e sintetico (max 3 frasi).
+- Se l'utente chiede in inglese, rispondi in inglese.
+- Non ripetere ogni volta chi sei se lo hai già detto.
+
+STRICT RULES:
 1. NON menzionare mai frasi come "in base al contesto fornito", "secondo i documenti" o "le informazioni non specificano".
 2. Rispondi come se questa fosse la tua conoscenza personale.
 3. Se un'informazione specifica (come un prezzo esatto) non è presente, dai una risposta orientativa basata sulla tua esperienza (per esempio spiegando da quali fattori può dipendere il prezzo finale) e invita l'utente a fare un'analisi approfondita con te.
@@ -136,31 +145,15 @@ REGOLE RIGIDE:
 5. Per approfondimenti, invita l'utente a scriverti dalla pagina dei contatti. Usa il markdown [contatti](https://2025sacquegna.iftscnosfapbologna.it/portfolio/contatti)
 6. BREVITÀ: Rispondi in massimo 4-5 frasi brevi. Sii sintetico e vai dritto al punto. Non ripetere più volte la stessa risposta.
 7. LINK CLICCABILE: Se fornisci un link, usa il formato Markdown: [testo del link](url). Il testo del link rendilo breve (una o due parole)
-8. LINGUA: Rispondi SEMPRE nella STESSA LINGUA usata dall'utente nell'ultima domanda. Se l'utente scrive in inglese, ignora l'italiano del contesto e rispondi ESCLUSIVAMENTE in inglese.
+8. LINGUA: Rispondi SEMPRE nella LINGUA usata dall'utente nell'ultima domanda. Se l'utente scrive in inglese, ignora l'italiano del contesto e rispondi ESCLUSIVAMENTE in inglese.
 9. Quando ti viene chiesto se sei un chatbot, ammetti di essere un assistente virtuale e non una persona vera. Non dire "sono un chatbot specializzato..." ma "sono l'assistente virtuale di Davide Sacquegna, specializzato..."
 
 Alla domanda 'qual è il senso della vita?' rispondi 42.
 
-Storico della Conversazione (usa questo solo per il contesto):
-{chat_history}
 
-Contesto:
-{context}
-
-DOMANDA ATTUALE (rispondi a questa):  
-{question}
 """)
 
-CONDENSE_QUESTION_PROMPT = ChatPromptTemplate.from_template("""
-Dato lo storico della conversazione e la successiva domanda,
-riformula la domanda successiva come una domanda standalone (autonoma).
-Se non c'è storico, restituisci solo la domanda successiva invariata.
 
-Storico della Conversazione:
-{chat_history}
-
-Domanda Successiva: {question}
-""")
 
 # ---------------------------------------------------------------------------
 # Funzioni di supporto
@@ -226,8 +219,7 @@ def initialize_rag():
             logger.info("ChromaDB non trovato. Avvio caricamento documenti e indicizzazione...")
 
             loader = WebBaseLoader([
-                "https://it.wikipedia.org/wiki/Catalogo_di_Messier",
-                "https://it.wikipedia.org/wiki/Galassia_di_Andromeda"
+                "https://2025Sacquegna.cnosfapbologna.it/portfolio/progetti",
             ])
             web_docs = loader.load()
 
@@ -310,7 +302,7 @@ def initialize_rag():
 
 @app.get("/")
 def read_root():
-    return {"message": "API RAG Catalogo Messier è online"}
+    return {"message": "API RAG online"}
 
 
 @app.post("/ask", response_model=Dict[str, Any])
