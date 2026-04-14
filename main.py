@@ -73,6 +73,7 @@ app.add_middleware(
 
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY non configurata. L'LLM non funzionerà.")
