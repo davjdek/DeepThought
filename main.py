@@ -91,6 +91,11 @@ if GROQ_API_KEY:
             model="llama-3.1-8b-instant",
             api_key=GROQ_API_KEY,
             temperature=0.7
+            model_kwargs={
+                "top_p": 0.9,
+                "presence_penalty": 0.6,
+                "frequency_penalty": 0.5
+            }
         )
         logger.info("LLM inizializzato: Groq llama-3.1-8b-instant")
     except Exception as e:
@@ -167,9 +172,13 @@ def format_docs(docs) -> str:
 def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
     lines = []
     for message in chat_history:
-        role = message.get("role", "user").capitalize()
+        # Assicuriamoci di mappare correttamente i ruoli
+        role = message.get("role", "user")
         content = message.get("content", "")
-        lines.append(f"{role}: {content}")
+        if role == "user":
+            lines.append(f"Utente: {content}")
+        else:
+            lines.append(f"Davide: {content}")
     return "\n".join(lines)
 
 # ---------------------------------------------------------------------------
