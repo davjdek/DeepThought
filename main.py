@@ -83,33 +83,18 @@ if not COHERE_API_KEY:
 # Inizializzazione LLM
 # ---------------------------------------------------------------------------
 
-MODELS = [
-    "gemini-3.1-flash-lite-preview",
-    "gemini-2.0-flash",
-]
-
 LLM: Optional[GoogleGenerativeAI] = None
-
-if not GEMINI_API_KEY:
-    logger.warning("LLM non inizializzato: chiave Gemini mancante.")
-else:
-    for model_name in MODELS:
-        try:
-            candidate = GoogleGenerativeAI(
-                model=model_name,
-                google_api_key=GEMINI_API_KEY,
-                temperature=0.7
-            )
-            # Fai una chiamata di test per verificare che funzioni
-            candidate.invoke("test")
-            LLM = candidate
-            logger.info(f"LLM inizializzato con modello: {model_name}")
-            break
-        except Exception as e:
-            logger.warning(f"Modello {model_name} non disponibile: {e}. Provo il prossimo...")
-
-    if LLM is None:
-        logger.error("Nessun modello disponibile. LLM non inizializzato.")
+try:
+    if GEMINI_API_KEY:
+        LLM = GoogleGenerativeAI(
+            model="gemini-3.1-flash-lite-preview",
+            google_api_key=GEMINI_API_KEY,
+            temperature=0.7
+        )
+    else:
+        logger.warning("LLM non inizializzato: chiave Gemini mancante.")
+except Exception as e:
+    logger.error(f"Errore inizializzazione LLM: {e}")
 
 # ---------------------------------------------------------------------------
 # Variabili globali retriever
