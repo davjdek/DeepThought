@@ -102,6 +102,9 @@ if GROQ_API_KEY:
 else:
     logger.warning("LLM non inizializzato: chiave Groq mancante.")
 
+# Inizializza un modello piccolo per compiti semplici
+LLM_FAST = ChatGroq(model="llama-3.1-8b-instant", api_key=GROQ_API_KEY)
+
 # ---------------------------------------------------------------------------
 # Variabili globali retriever
 # ---------------------------------------------------------------------------
@@ -130,18 +133,11 @@ Use the following information to answer the user's question in a natural, direct
 
 STRICT RULES:
 1. NEVER use phrases like "based on the context provided," "according to the documents," or "the information does not specify."
-2. Answer as if this were your personal knowledge.
-3. If specific information (such as an exact price) is missing, give a tentative answer based on your experience (for example, explaining which factors may influence the final price) and invite the user to discuss the matter in depth with you.
-4. Use "I" (e.g., "I deal with...", "In my approach...") instead of speaking in the third person when referring to Davide.
-5. For further information, invite the user to contact you from the contact page. Use Markdown [contacts](https://2025sacquegna.iftscnosfapbologna.it/portfolio/contatti)
-6. BREVITY: Reply in 4-5 short sentences maximum. Be concise and to the point. Don't repeat the same answer multiple times.
-7. CLICKABLE LINK: If you provide a link, use Markdown format: [link text](url). Keep the link text short (one or two words).
-8. LANGUAGE: ALWAYS respond in the SAME LANGUAGE the user used in the last question. If the user writes in English, ignore the Italian context and respond ONLY in English.
-9. When asked if you're a chatbot, admit that you're a virtual assistant and not a real person. Don't say "I'm a specialized chatbot..." but "I'm Davide Sacquegna's virtual assistant, specialized..."
-10. DON'T SAY WHO YOU ARE IF YOU'RE NOT ASKED
-11. If asked about your web site, provide this url: https://2025sacquegna.iftscnosfapbologna.it/portfolio
-
-To the question 'What is the meaning of life?' answer 42.
+2. For further information, invite the user to contact you from the contact page. Use Markdown [contacts](https://2025sacquegna.iftscnosfapbologna.it/portfolio/contatti)
+3. BREVITY: Reply in 4-5 short sentences maximum. Be concise and to the point. Don't repeat the same answer multiple times.
+4. LANGUAGE: ALWAYS respond in the SAME LANGUAGE the user used in the last question.
+5. When asked if you're a chatbot, admit that you're a virtual assistant and not a real person. Don't say "I'm a specialized chatbot..." but "I'm Davide Sacquegna's virtual assistant, specialized..."
+6. If asked about your web site, provide this url: https://2025sacquegna.iftscnosfapbologna.it/portfolio
 
 Conversation History (use this for context only):
 {chat_history}
@@ -172,9 +168,10 @@ def format_docs(docs) -> str:
     return "\n\n".join(doc.page_content for doc in docs)
 
 
-def format_chat_history(chat_history: List[Dict[str, str]]) -> str:
+def format_chat_history(chat_history: List[Dict[str, str]], limit: int = 6) -> str:
     formatted = ""
-    for msg in chat_history:
+    # Prende solo gli ultimi 'limit' messaggi
+    for msg in chat_history[-limit:]: 
         role = "User" if msg.get("role") == "user" else "Assistant"
         content = msg.get("content")
         formatted += f"\n--- {role} ---\n{content}\n"
@@ -291,7 +288,7 @@ def initialize_rag():
                     chat_history=lambda x: format_chat_history(x["chat_history"])
                 )
                 | CONDENSE_QUESTION_PROMPT
-                | LLM
+                | LLM_FAST  # <--- Usa l'8B qui!
                 | StrOutputParser()
                 | retriever
             ).with_config(run_name="HistoryAwareRetriever")
