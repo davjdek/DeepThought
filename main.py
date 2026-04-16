@@ -39,6 +39,7 @@ headers = {
 }
 
 KB_URL = "https://drive.google.com/uc?export=download&id=1YIDVQmldy2efy3tTwkJwP-sEtTglmnpn"
+KB_EN_URL ="https://drive.google.com/uc?export=download&id=1Qj3tIH1HaunyqtEIoCMKuwIDyUNorzGm"
 CHROMA_PERSIST_DIR = "./chroma_db"
 
 logging.basicConfig(level=logging.INFO)
@@ -228,7 +229,7 @@ def initialize_rag():
             web_docs = loader.load()
 
             pdf_docs = []
-            for pdf_url in [KB_URL]:
+            for pdf_url in [KB_URL, KB_EN_URL]:
                 temp_path = None
                 try:
                     logger.info(f"Download PDF: {pdf_url}")
