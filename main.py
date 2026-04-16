@@ -150,14 +150,12 @@ CURRENT QUESTION (answer this):
 """)
 
 CONDENSE_QUESTION_PROMPT = ChatPromptTemplate.from_template("""
-Dato lo storico della conversazione e la successiva domanda,
-riformula la domanda successiva come una domanda standalone (autonoma).
-Se non c'è storico, restituisci solo la domanda successiva invariata.
+Dato lo storico della conversazione e la domanda, riformula la domanda come standalone.
+IMPORTANT: The standalone question MUST be in the same language as the "Successive Question".
 
-Storico della Conversazione:
-{chat_history}
+Storico: {chat_history}
+Successive Question: {question}
 
-Domanda Successiva: {question}
 """)
 
 # ---------------------------------------------------------------------------
