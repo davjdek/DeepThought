@@ -306,6 +306,27 @@ def initialize_rag():
 # ---------------------------------------------------------------------------
 
 @app.get("/")
+
+@app.get("/test-groq")
+async def test_groq():
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": "ping"}]
+                }
+            )
+        return {"status": response.status_code, "response": response.json()}
+    except Exception as e:
+        return {"error": str(e)}
+
 def read_root():
     return {"message": "API RAG Catalogo Messier è online"}
 
