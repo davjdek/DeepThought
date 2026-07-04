@@ -105,7 +105,7 @@ else:
     logger.warning("LLM non inizializzato: chiave Groq mancante.")
 
 # Inizializza un modello piccolo per compiti semplici
-LLM_FAST = ChatGroq(model="llama-3.1-8b-instant", api_key=GROQ_API_KEY)
+LLM_FAST = ChatGroq(model="openai/gpt-oss-20b", api_key=GROQ_API_KEY)
 
 # ---------------------------------------------------------------------------
 # Variabili globali retriever
