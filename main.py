@@ -57,8 +57,8 @@ ALLOWED_ORIGINS = [
     "http://localhost:80",
     "http://localhost",
     "https://2025sacquegna.iftscnosfapbologna.it",
-    "https://davidesacquegna.altervista.org/",
-    "http://davidesacquegna.altervista.org/",
+    "https://davidesacquegna.altervista.org",
+    "http://davidesacquegna.altervista.org",
 ]
 
 app.add_middleware(
