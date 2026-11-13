@@ -227,7 +227,7 @@ def initialize_rag():
             logger.info("ChromaDB non trovato. Avvio caricamento documenti e indicizzazione...")
 
             loader = WebBaseLoader([
-                "https://davidesacquegna.altervista.org/portfolio/progetti",
+                "https://davidesacquegna.altervista.org/progetti",
             ])
             web_docs = loader.load()
 
